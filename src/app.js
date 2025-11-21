@@ -1,5 +1,17 @@
 import fs from "node:fs/promises";
-import { PrivateKey, PublicKey, encrypt, decrypt } from "eciesjs";
+import { PrivateKey, decrypt } from "eciesjs";
+
+// Helper function to convert hex string to Uint8Array
+function hexToUint8Array(hex) {
+  // Remove 0x prefix if present
+  const cleanHex = hex.startsWith("0x") ? hex.slice(2) : hex;
+  const length = cleanHex.length;
+  const bytes = new Uint8Array(length / 2);
+  for (let i = 0; i < length; i += 2) {
+    bytes[i / 2] = parseInt(cleanHex.substring(i, i + 2), 16);
+  }
+  return bytes;
+}
 
 const main = async () => {
   const { IEXEC_OUT } = process.env;
@@ -7,14 +19,6 @@ const main = async () => {
   let computedJsonObj = {};
 
   try {
-    let messages = [];
-
-    // Example of process.argv:
-    // [ '/usr/local/bin/node', '/app/src/app.js', 'Bob' ]
-    const args = process.argv.slice(2);
-    console.log(`Received ${args.length} args`);
-    messages.push(args.join(" "));
-
     // Get app secret (private key) from environment
     const { IEXEC_APP_DEVELOPER_SECRET } = process.env;
     if (!IEXEC_APP_DEVELOPER_SECRET) {
@@ -24,13 +28,35 @@ const main = async () => {
     const redactedAppSecret = IEXEC_APP_DEVELOPER_SECRET.replace(/./g, "*");
     console.log(`Got an app secret (${redactedAppSecret})!`);
 
-    // Initialize ECIES encryption using the app secret as private key
+    // Create private key from app secret
     const privateKey = PrivateKey.fromHex(IEXEC_APP_DEVELOPER_SECRET);
-    const publicKey = privateKey.publicKey;
-    console.log(`Public key: ${publicKey.toHex()}`);
+
+    // Parse command line arguments
+    // Expected: [encryptedAmount, senderWallet, receiverWallet]
+    const args = process.argv.slice(2);
+    console.log(`Received ${args.length} args`);
+
+    if (args.length < 3) {
+      throw new Error(
+        "Expected 3 arguments: encryptedAmount, senderWallet, receiverWallet"
+      );
+    }
+
+    const [encryptedAmountHex, senderWallet, receiverWallet] = args;
+
+    // Convert hex string to Uint8Array for decryption
+    const encryptedAmount = hexToUint8Array(encryptedAmountHex);
+
+    // Decrypt the amount using the private key
+    const decryptedAmountBytes = decrypt(privateKey.secret, encryptedAmount);
+    const decryptedAmount = new TextDecoder().decode(decryptedAmountBytes);
+
+    console.log(`Decrypted amount: ${decryptedAmount}`);
+    console.log(`Sender wallet: ${senderWallet}`);
+    console.log(`Receiver wallet: ${receiverWallet}`);
 
     // Write result to IEXEC_OUT
-    const resultText = `Hello, ${messages.join(" ") || "World"}!`;
+    const resultText = `Encrypted Amount: ${encryptedAmountHex}\nSender Wallet: ${senderWallet}\nReceiver Wallet: ${receiverWallet}\nDecrypted Amount: ${decryptedAmount}`;
     await fs.writeFile(`${IEXEC_OUT}/result.txt`, resultText);
 
     // Build the "computed.json" object
