@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import { PrivateKey, PublicKey, encrypt, decrypt } from "eciesjs";
 
 const main = async () => {
   const { IEXEC_OUT } = process.env;
@@ -14,13 +15,19 @@ const main = async () => {
     console.log(`Received ${args.length} args`);
     messages.push(args.join(" "));
 
+    // Get app secret (private key) from environment
     const { IEXEC_APP_DEVELOPER_SECRET } = process.env;
-    if (IEXEC_APP_DEVELOPER_SECRET) {
-      const redactedAppSecret = IEXEC_APP_DEVELOPER_SECRET.replace(/./g, "*");
-      console.log(`Got an app secret (${redactedAppSecret})!`);
-    } else {
-      console.log(`App secret is not set`);
+    if (!IEXEC_APP_DEVELOPER_SECRET) {
+      throw new Error("IEXEC_APP_DEVELOPER_SECRET is not set");
     }
+
+    const redactedAppSecret = IEXEC_APP_DEVELOPER_SECRET.replace(/./g, "*");
+    console.log(`Got an app secret (${redactedAppSecret})!`);
+
+    // Initialize ECIES encryption using the app secret as private key
+    const privateKey = PrivateKey.fromHex(IEXEC_APP_DEVELOPER_SECRET);
+    const publicKey = privateKey.publicKey;
+    console.log(`Public key: ${publicKey.toHex()}`);
 
     // Write result to IEXEC_OUT
     const resultText = `Hello, ${messages.join(" ") || "World"}!`;

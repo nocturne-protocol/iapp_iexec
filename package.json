@@ -4,5 +4,10 @@
   "description": "",
   "main": "src/app.js",
   "type": "module",
-  "dependencies": {}
+  "scripts": {
+    "test": "node test.js"
+  },
+  "dependencies": {
+    "eciesjs": "^0.4.16"
+  }
 }
