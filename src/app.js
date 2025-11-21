@@ -1,5 +1,5 @@
 import fs from "node:fs/promises";
-import { PrivateKey, decrypt } from "eciesjs";
+import { PrivateKey, PublicKey, decrypt } from "eciesjs";
 
 // Helper function to convert hex string to Uint8Array
 function hexToUint8Array(hex) {
@@ -30,6 +30,8 @@ const main = async () => {
 
     // Create private key from app secret
     const privateKey = PrivateKey.fromHex(IEXEC_APP_DEVELOPER_SECRET);
+    const publicKey = privateKey.publicKey;
+    console.log(`Public key: ${publicKey.toHex()}`);
 
     // Parse command line arguments
     // Expected: [encryptedAmount, senderWallet, receiverWallet]
@@ -44,10 +46,41 @@ const main = async () => {
 
     const [encryptedAmountHex, senderWallet, receiverWallet] = args;
 
+    // Validate hex string format
+    const cleanHex = encryptedAmountHex.startsWith("0x")
+      ? encryptedAmountHex.slice(2)
+      : encryptedAmountHex;
+
+    if (cleanHex.length % 2 !== 0) {
+      throw new Error("Invalid hex string: length must be even");
+    }
+
+    console.log(
+      `Encrypted amount hex length: ${encryptedAmountHex.length} chars`
+    );
+    console.log(
+      `Encrypted amount hex (first 100 chars): ${encryptedAmountHex.substring(
+        0,
+        100
+      )}...`
+    );
+
     // Convert hex string to Uint8Array for decryption
     const encryptedAmount = hexToUint8Array(encryptedAmountHex);
+    console.log(
+      `Encrypted amount bytes length: ${encryptedAmount.length} bytes`
+    );
+
+    // ECIES encrypted data should be at least 65 bytes (uncompressed ephemeral key) + nonce + tag
+    // Minimum: 65 (ephemeral pk) + 12 (nonce) + 16 (tag) = 93 bytes for secp256k1
+    if (encryptedAmount.length < 93) {
+      throw new Error(
+        `Invalid encrypted data: too short (${encryptedAmount.length} bytes, expected at least 93 bytes)`
+      );
+    }
 
     // Decrypt the amount using the private key
+    // decrypt expects: decrypt(privateKey, encryptedData)
     const decryptedAmountBytes = decrypt(privateKey.secret, encryptedAmount);
     const decryptedAmount = new TextDecoder().decode(decryptedAmountBytes);
 

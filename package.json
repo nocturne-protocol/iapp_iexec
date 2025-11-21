@@ -5,7 +5,8 @@
   "main": "src/app.js",
   "type": "module",
   "scripts": {
-    "test": "node test.js"
+    "test": "node test.js",
+    "encrypt-amount": "node encrypt-amount.js"
   },
   "dependencies": {
     "eciesjs": "^0.4.16"
