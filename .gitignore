@@ -7,3 +7,6 @@ node_modules
 # test directories
 input
 output
+
+# iExec documentation (for AI reference only)
+docs
