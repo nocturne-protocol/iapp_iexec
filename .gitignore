@@ -11,3 +11,7 @@ test-output
 
 # iExec documentation (for AI reference only)
 docs
+
+.env
+
+package-lock.json
