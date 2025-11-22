@@ -9,6 +9,7 @@
     "encrypt-amount": "node encrypt-amount.js"
   },
   "dependencies": {
-    "eciesjs": "^0.4.16"
+    "eciesjs": "^0.4.16",
+    "viem": "^2.39.3"
   }
 }

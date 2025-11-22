@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import { PrivateKey, PublicKey, decrypt } from "eciesjs";
+import { fetchContractData } from "./services/rpc.js";
 
 // Helper function to convert hex string to Uint8Array
 function hexToUint8Array(hex) {
@@ -88,8 +89,18 @@ const main = async () => {
     console.log(`Sender wallet: ${senderWallet}`);
     console.log(`Receiver wallet: ${receiverWallet}`);
 
+    // Fetch contract data via RPC
+    console.log("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    const contractData = await fetchContractData(senderWallet);
+    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+
+    // Log the 2 data points
+    console.log("📊 Contract Data Retrieved:");
+    console.log(`  Balance: ${contractData.balance} wei`);
+    console.log(`  Total Supply: ${contractData.totalSupply} wei`);
+
     // Write result to IEXEC_OUT
-    const resultText = `Encrypted Amount: ${encryptedAmountHex}\nSender Wallet: ${senderWallet}\nReceiver Wallet: ${receiverWallet}\nDecrypted Amount: ${decryptedAmount}`;
+    const resultText = `Encrypted Amount: ${encryptedAmountHex}\nSender Wallet: ${senderWallet}\nReceiver Wallet: ${receiverWallet}\nDecrypted Amount: ${decryptedAmount}\n\nContract Data:\nBalance: ${contractData.balance} wei\nTotal Supply: ${contractData.totalSupply} wei`;
     await fs.writeFile(`${IEXEC_OUT}/result.txt`, resultText);
 
     // Build the "computed.json" object
