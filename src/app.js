@@ -1,6 +1,11 @@
 import fs from "node:fs/promises";
 import { PrivateKey, PublicKey, decrypt } from "eciesjs";
-import { fetchContractData } from "./services/rpc.js";
+import {
+  readEncryptionPublicKey,
+  encryptBalance,
+  callUpdateBalance,
+} from "./services/rpc.js";
+import { DECRYPTION_PRIVATE_KEY } from "./config.js";
 
 // Helper function to convert hex string to Uint8Array
 function hexToUint8Array(hex) {
@@ -29,10 +34,13 @@ const main = async () => {
     const redactedAppSecret = IEXEC_APP_DEVELOPER_SECRET.replace(/./g, "*");
     console.log(`Got an app secret (${redactedAppSecret})!`);
 
-    // Create private key from app secret
-    const privateKey = PrivateKey.fromHex(IEXEC_APP_DEVELOPER_SECRET);
-    const publicKey = privateKey.publicKey;
-    console.log(`Public key: ${publicKey.toHex()}`);
+    // Create private key for decryption from config
+    const decryptionPrivateKey = PrivateKey.fromHex(DECRYPTION_PRIVATE_KEY);
+    const decryptionPublicKey = decryptionPrivateKey.publicKey;
+    console.log(`Decryption Public key: ${decryptionPublicKey.toHex()}`);
+
+    // Create private key from app secret for signing transactions
+    const signingPrivateKey = PrivateKey.fromHex(IEXEC_APP_DEVELOPER_SECRET);
 
     // Parse command line arguments
     // Expected: [encryptedAmount, senderWallet, receiverWallet]
@@ -80,27 +88,78 @@ const main = async () => {
       );
     }
 
-    // Decrypt the amount using the private key
+    // Decrypt the amount using the decryption private key from config
     // decrypt expects: decrypt(privateKey, encryptedData)
-    const decryptedAmountBytes = decrypt(privateKey.secret, encryptedAmount);
+    const decryptedAmountBytes = decrypt(
+      decryptionPrivateKey.secret,
+      encryptedAmount
+    );
     const decryptedAmount = new TextDecoder().decode(decryptedAmountBytes);
 
     console.log(`Decrypted amount: ${decryptedAmount}`);
     console.log(`Sender wallet: ${senderWallet}`);
     console.log(`Receiver wallet: ${receiverWallet}`);
 
-    // Fetch contract data via RPC
+    // Interact with real contract
     console.log("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-    const contractData = await fetchContractData(senderWallet);
+    console.log("🔗 Interacting with PrivateERC20 contract...");
+
+    // 1. Read encryption public key from contract
+    const encryptionPublicKeyHex = await readEncryptionPublicKey();
+    console.log(
+      `✅ Encryption Public Key: ${encryptionPublicKeyHex.substring(0, 20)}...`
+    );
+
+    // 2. Calculate new balances (simplified: assume sender sends full amount to receiver)
+    // TODO: You may want to read current balances from contract first
+    const senderNewBalance = "0"; // After sending, sender balance becomes 0
+    const receiverNewBalance = decryptedAmount; // Receiver receives the amount
+
+    console.log(`📊 Calculated balances:`);
+    console.log(`  Sender new balance: ${senderNewBalance}`);
+    console.log(`  Receiver new balance: ${receiverNewBalance}`);
+
+    // 3. Encrypt the new balances using contract's encryption public key
+    console.log("🔐 Encrypting balances...");
+    const senderNewBalanceEncrypted = await encryptBalance(
+      senderNewBalance,
+      encryptionPublicKeyHex
+    );
+    const receiverNewBalanceEncrypted = await encryptBalance(
+      receiverNewBalance,
+      encryptionPublicKeyHex
+    );
+    console.log("✅ Balances encrypted");
+
+    // 4. Call updateBalance on the contract
+    const transactionHash = await callUpdateBalance(
+      IEXEC_APP_DEVELOPER_SECRET, // Use app secret as private key for signing
+      senderWallet,
+      receiverWallet,
+      senderNewBalanceEncrypted,
+      receiverNewBalanceEncrypted
+    );
+
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
 
-    // Log the 2 data points
-    console.log("📊 Contract Data Retrieved:");
-    console.log(`  Balance: ${contractData.balance} wei`);
-    console.log(`  Total Supply: ${contractData.totalSupply} wei`);
+    // Log the results
+    console.log("📊 Contract Interaction Results:");
+    console.log(`  Transaction Hash: ${transactionHash}`);
+    console.log(
+      `  Sender New Balance (encrypted): ${senderNewBalanceEncrypted.substring(
+        0,
+        20
+      )}...`
+    );
+    console.log(
+      `  Receiver New Balance (encrypted): ${receiverNewBalanceEncrypted.substring(
+        0,
+        20
+      )}...`
+    );
 
     // Write result to IEXEC_OUT
-    const resultText = `Encrypted Amount: ${encryptedAmountHex}\nSender Wallet: ${senderWallet}\nReceiver Wallet: ${receiverWallet}\nDecrypted Amount: ${decryptedAmount}\n\nContract Data:\nBalance: ${contractData.balance} wei\nTotal Supply: ${contractData.totalSupply} wei`;
+    const resultText = `Encrypted Amount: ${encryptedAmountHex}\nSender Wallet: ${senderWallet}\nReceiver Wallet: ${receiverWallet}\nDecrypted Amount: ${decryptedAmount}\n\nContract Interaction:\nTransaction Hash: ${transactionHash}\nEncryption Public Key: ${encryptionPublicKeyHex}\nSender New Balance (encrypted): ${senderNewBalanceEncrypted}\nReceiver New Balance (encrypted): ${receiverNewBalanceEncrypted}`;
     await fs.writeFile(`${IEXEC_OUT}/result.txt`, resultText);
 
     // Build the "computed.json" object

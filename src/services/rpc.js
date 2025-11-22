@@ -1,99 +1,132 @@
-import { createPublicClient, http } from "viem";
-import { arbitrumSepolia } from "viem/chains";
 import {
-  MOCK_CONTRACT_ADDRESS,
-  MOCK_CONTRACT_ABI,
-  MOCK_DATA,
-} from "../contracts/mock-contract.js";
+  createPublicClient,
+  createWalletClient,
+  http,
+  getContract,
+} from "viem";
+import { arbitrumSepolia } from "viem/chains";
+import { privateKeyToAccount } from "viem/accounts";
+import { CONTRACT_ADDRESS, CONTRACT_ABI } from "../contracts/contract.js";
+import { PublicKey, encrypt } from "eciesjs";
+import { RPC_URL } from "../config.js";
 
-// RPC endpoint
-const RPC_ENDPOINT = "https://arbitrum-sepolia.gateway.tenderly.co";
-
-// Check if we should use mock data
-// Use mock data if explicitly set, or if in test environment, or if no network access
-const USE_MOCK_DATA =
-  process.env.USE_MOCK_DATA === "true" ||
-  process.env.NODE_ENV === "test" ||
-  !process.env.ENABLE_REAL_RPC;
-
-// Create viem public client
+// Create viem public client for reading
 const publicClient = createPublicClient({
   chain: arbitrumSepolia,
-  transport: http(RPC_ENDPOINT),
+  transport: http(RPC_URL),
 });
 
-/**
- * Fetch balance from contract
- * @param {string} accountAddress - Address to check balance for
- * @returns {Promise<string>} Balance in wei
- */
-export async function getBalance(accountAddress) {
-  if (USE_MOCK_DATA) {
-    console.log("📦 Using mock data for getBalance");
-    return MOCK_DATA.getBalance;
-  }
+// Helper to convert bytes to hex string
+function bytesToHex(bytes) {
+  return (
+    "0x" +
+    Array.from(bytes)
+      .map(b => b.toString(16).padStart(2, "0"))
+      .join("")
+  );
+}
 
+// Helper to convert hex string to Uint8Array
+function hexToUint8Array(hex) {
+  const cleanHex = hex.startsWith("0x") ? hex.slice(2) : hex;
+  const bytes = new Uint8Array(cleanHex.length / 2);
+  for (let i = 0; i < cleanHex.length; i += 2) {
+    bytes[i / 2] = parseInt(cleanHex.substring(i, i + 2), 16);
+  }
+  return bytes;
+}
+
+/**
+ * Read the encryption public key from the contract
+ * @returns {Promise<string>} Encryption public key as hex string
+ */
+export async function readEncryptionPublicKey() {
   try {
-    const balance = await publicClient.readContract({
-      address: MOCK_CONTRACT_ADDRESS,
-      abi: MOCK_CONTRACT_ABI,
-      functionName: "getBalance",
-      args: [accountAddress],
+    const contract = getContract({
+      address: CONTRACT_ADDRESS,
+      abi: CONTRACT_ABI,
+      client: publicClient,
     });
 
-    return balance.toString();
+    const publicKey = await contract.read.encryptionPublicKey();
+    console.log("✅ Encryption Public Key retrieved from contract");
+    return bytesToHex(publicKey);
   } catch (error) {
-    console.error("❌ Error fetching balance:", error.message);
-    // Fallback to mock data on error
-    console.log("📦 Falling back to mock data for getBalance");
-    return MOCK_DATA.getBalance;
+    console.error("❌ Error reading encryption public key:", error.message);
+    throw error;
   }
 }
 
 /**
- * Fetch total supply from contract
- * @returns {Promise<string>} Total supply in wei
+ * Call updateBalance on the contract
+ * @param {string} privateKeyHex - Private key for signing (from app secret)
+ * @param {string} senderAddress - Sender address
+ * @param {string} receiverAddress - Receiver address
+ * @param {string} senderNewBalanceEncrypted - Encrypted sender balance (hex)
+ * @param {string} receiverNewBalanceEncrypted - Encrypted receiver balance (hex)
+ * @returns {Promise<string>} Transaction hash
  */
-export async function getTotalSupply() {
-  if (USE_MOCK_DATA) {
-    console.log("📦 Using mock data for getTotalSupply");
-    return MOCK_DATA.getTotalSupply;
-  }
-
+export async function callUpdateBalance(
+  privateKeyHex,
+  senderAddress,
+  receiverAddress,
+  senderNewBalanceEncrypted,
+  receiverNewBalanceEncrypted
+) {
   try {
-    const totalSupply = await publicClient.readContract({
-      address: MOCK_CONTRACT_ADDRESS,
-      abi: MOCK_CONTRACT_ABI,
-      functionName: "getTotalSupply",
+    const account = privateKeyToAccount(privateKeyHex);
+
+    const walletClient = createWalletClient({
+      chain: arbitrumSepolia,
+      transport: http(RPC_URL),
+      account,
     });
 
-    return totalSupply.toString();
+    const contract = getContract({
+      address: CONTRACT_ADDRESS,
+      abi: CONTRACT_ABI,
+      client: walletClient,
+    });
+
+    console.log("📝 Calling updateBalance on contract...");
+    console.log(`  Sender: ${senderAddress}`);
+    console.log(`  Receiver: ${receiverAddress}`);
+
+    const hash = await contract.write.updateBalance([
+      senderAddress,
+      receiverAddress,
+      hexToUint8Array(senderNewBalanceEncrypted),
+      hexToUint8Array(receiverNewBalanceEncrypted),
+    ]);
+
+    console.log("✅ Transaction hash:", hash);
+    return hash;
   } catch (error) {
-    console.error("❌ Error fetching total supply:", error.message);
-    // Fallback to mock data on error
-    console.log("📦 Falling back to mock data for getTotalSupply");
-    return MOCK_DATA.getTotalSupply;
+    console.error("❌ Error calling updateBalance:", error.message);
+    throw error;
   }
 }
 
 /**
- * Fetch both data points from the contract
- * @param {string} accountAddress - Address to check balance for
- * @returns {Promise<{balance: string, totalSupply: string}>}
+ * Encrypt balance using contract's encryption public key
+ * @param {string} balance - Balance as string
+ * @param {string} encryptionPublicKeyHex - Contract's encryption public key (hex)
+ * @returns {Promise<string>} Encrypted balance as hex string
  */
-export async function fetchContractData(accountAddress) {
-  console.log("🔗 Fetching contract data from Arbitrum Sepolia...");
-  console.log(`📍 Contract address: ${MOCK_CONTRACT_ADDRESS}`);
-  console.log(`👤 Account address: ${accountAddress}`);
+export async function encryptBalance(balance, encryptionPublicKeyHex) {
+  try {
+    // Convert public key hex to PublicKey object
+    const publicKeyBytes = hexToUint8Array(encryptionPublicKeyHex);
+    const publicKey = new PublicKey(publicKeyBytes);
 
-  const [balance, totalSupply] = await Promise.all([
-    getBalance(accountAddress),
-    getTotalSupply(),
-  ]);
+    // Encrypt the balance
+    const encoder = new TextEncoder();
+    const balanceBytes = encoder.encode(balance);
+    const encrypted = encrypt(publicKey.toBytes(), balanceBytes);
 
-  return {
-    balance,
-    totalSupply,
-  };
+    return bytesToHex(encrypted);
+  } catch (error) {
+    console.error("❌ Error encrypting balance:", error.message);
+    throw error;
+  }
 }
-
