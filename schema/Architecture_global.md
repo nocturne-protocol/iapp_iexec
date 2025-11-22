@@ -4,7 +4,7 @@ flowchart LR
   %% Main actors
   CLIENT[Client / dApp]
 
-  subgraph SMIN["Blockchain"]
+  subgraph SMIN["Source Chains (L1 / L2)"]
     ARG1["Set up on chain requesters orders"]
   end
 
