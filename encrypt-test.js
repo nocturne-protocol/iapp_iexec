@@ -1,13 +1,14 @@
 import { PrivateKey, encrypt } from "eciesjs";
+import fs from "fs";
 
-const privateKeyHex =
-  "abb483444a79c9e62776e2c8707939426791663abba76a1272f1bf3d4bd901f1";
+const config = JSON.parse(fs.readFileSync("iapp.config.json", "utf8"));
+const privateKeyHex = config.appSecret;
 const privateKey = PrivateKey.fromHex(privateKeyHex);
 const publicKey = privateKey.publicKey;
 
 const encoder = new TextEncoder();
 const amountBytes = encoder.encode("100");
-const encrypted = encrypt(publicKey.toBytes(), amountBytes);
+const encrypted = encrypt(publicKey.uncompressed, amountBytes);
 
 const encryptedHex =
   "0x" +

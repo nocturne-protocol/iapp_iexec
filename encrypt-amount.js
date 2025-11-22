@@ -43,7 +43,7 @@ async function encryptAmount() {
     // Encrypt the amount
     const encoder = new TextEncoder();
     const amountBytes = encoder.encode(amount);
-    const encrypted = encrypt(publicKey.toBytes(), amountBytes);
+    const encrypted = encrypt(publicKey.uncompressed, amountBytes);
     const encryptedHex = uint8ArrayToHex(encrypted);
 
     console.log("✅ Encrypted Amount:");

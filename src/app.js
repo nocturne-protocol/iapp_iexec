@@ -6,7 +6,6 @@ import {
   callUpdateBalance,
   readEncryptedBalance,
 } from "./services/rpc.js";
-import { DECRYPTION_PRIVATE_KEY } from "./config.js";
 
 // Helper function to convert hex string to Uint8Array
 function hexToUint8Array(hex) {
@@ -35,43 +34,19 @@ const main = async () => {
     const redactedAppSecret = IEXEC_APP_DEVELOPER_SECRET.replace(/./g, "*");
     console.log(`Got an app secret (${redactedAppSecret})!`);
 
-    // Normalize private keys (ensure consistent format)
+    // Normalize private key (ensure consistent format)
     const normalizedAppSecret = IEXEC_APP_DEVELOPER_SECRET.startsWith("0x")
       ? IEXEC_APP_DEVELOPER_SECRET.slice(2)
       : IEXEC_APP_DEVELOPER_SECRET;
-    const normalizedDecryptionKey = DECRYPTION_PRIVATE_KEY.startsWith("0x")
-      ? DECRYPTION_PRIVATE_KEY.slice(2)
-      : DECRYPTION_PRIVATE_KEY;
 
-    // Create private key for decrypting encrypted amounts (from app secret)
-    // The encrypted amount is encrypted with the app's public key
+    // Create private key for all decryption operations (from app secret)
+    // All encrypted data (amounts and balances) should be encrypted with the app's public key
     const appPrivateKey = PrivateKey.fromHex(normalizedAppSecret);
     const appPublicKey = appPrivateKey.publicKey;
     console.log(`App Public key: ${appPublicKey.toHex()}`);
     console.log(
       `App Secret (first 10 chars): ${normalizedAppSecret.substring(0, 10)}...`
     );
-
-    // Create private key for decrypting balances from contract (from config)
-    // Balances are encrypted with the contract's encryption public key
-    const decryptionPrivateKey = PrivateKey.fromHex(normalizedDecryptionKey);
-    const decryptionPublicKey = decryptionPrivateKey.publicKey;
-    console.log(`Decryption Public key: ${decryptionPublicKey.toHex()}`);
-    console.log(
-      `Decryption Key (first 10 chars): ${normalizedDecryptionKey.substring(
-        0,
-        10
-      )}...`
-    );
-
-    // Check if keys are the same
-    if (normalizedAppSecret === normalizedDecryptionKey) {
-      console.log("⚠️  WARNING: App Secret and Decryption Key are the same!");
-    }
-
-    // Create private key from app secret for signing transactions
-    // Note: viem expects hex string with 0x prefix, so we'll use the original IEXEC_APP_DEVELOPER_SECRET
-    const signingPrivateKey = IEXEC_APP_DEVELOPER_SECRET;
 
     // Parse command line arguments
     // Expected: [encryptedAmount, senderWallet, receiverWallet]
@@ -131,30 +106,8 @@ const main = async () => {
         .join("")}...`
     );
 
-    let decryptedAmountBytes;
-    try {
-      decryptedAmountBytes = decrypt(appPrivateKey.secret, encryptedAmount);
-      console.log(`✅ Decryption successful with App Private Key`);
-    } catch (error) {
-      console.log(
-        `❌ Decryption failed with App Private Key: ${error.message}`
-      );
-      console.log(`Attempting decryption with Decryption Private Key...`);
-      try {
-        decryptedAmountBytes = decrypt(
-          decryptionPrivateKey.secret,
-          encryptedAmount
-        );
-        console.log(`✅ Decryption successful with Decryption Private Key`);
-      } catch (error2) {
-        console.log(
-          `❌ Decryption also failed with Decryption Private Key: ${error2.message}`
-        );
-        throw new Error(
-          `Failed to decrypt with both keys. Original error: ${error.message}`
-        );
-      }
-    }
+    const decryptedAmountBytes = decrypt(appPrivateKey.toHex(), encryptedAmount);
+    console.log(`✅ Decryption successful with App Private Key`);
 
     const decryptedAmount = new TextDecoder().decode(decryptedAmountBytes);
 
@@ -199,11 +152,11 @@ const main = async () => {
     let receiverBalance = 0;
 
     // Decrypt sender balance (handle empty balance case)
-    // Balances are encrypted with the contract's encryption public key
+    // Balances are encrypted with the app's public key
     if (senderBalanceBytes.length > 0) {
       try {
         const decryptedSenderBytes = decrypt(
-          decryptionPrivateKey.secret,
+          appPrivateKey.toHex(),
           senderBalanceBytes
         );
         senderBalance = parseFloat(
@@ -220,11 +173,11 @@ const main = async () => {
     }
 
     // Decrypt receiver balance (handle empty balance case)
-    // Balances are encrypted with the contract's encryption public key
+    // Balances are encrypted with the app's public key
     if (receiverBalanceBytes.length > 0) {
       try {
         const decryptedReceiverBytes = decrypt(
-          decryptionPrivateKey.secret,
+          appPrivateKey.toHex(),
           receiverBalanceBytes
         );
         receiverBalance = parseFloat(

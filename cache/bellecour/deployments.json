@@ -1,5 +1,11 @@
 [
   {
+    "image": "dev419/nocturne:0.0.2-tee-scone-5.9.1-v16-prod-73a6581309c8",
+    "app": "0xE2eDF1d1fd9cD35670D15033d5448EdEB3587d81",
+    "owner": "0x2Ab2e6d0eAf38ced37148021FB23041ec03D93cB",
+    "date": "2025-11-22T17:10:53.226Z"
+  },
+  {
     "image": "dev419/nocturne:0.0.1-tee-scone-5.9.1-v16-prod-14980c7f6f1a",
     "app": "0xB7402f696056AD8D773a7dE04E9eE45e93aeA827",
     "owner": "0x064d4F564a2c8c124dd8ff62b9b96Ce65cDbE427",

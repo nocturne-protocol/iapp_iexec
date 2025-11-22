@@ -1,0 +1,20 @@
+[
+  {
+    "app": "0xBb21e58a72327A5FDA6f5d3673F1Fab6607aEaB1",
+    "dealid": "0xc6da9ee61eaf934e7367f9bd78170a1d024d9872070282772833f92dfc8dd91c",
+    "taskids": [
+      "0x7b699860bae650d3f0cb1ffd51aae23baa36b84232cbacecf6ae5aaa7822e499"
+    ],
+    "txHash": "0x08f7391c67d90fda71e97d6945428f0b83c6712564e2f8ad70a11cf17ef8a2a3",
+    "date": "2025-11-22T20:26:09.620Z"
+  },
+  {
+    "app": "0xBb21e58a72327A5FDA6f5d3673F1Fab6607aEaB1",
+    "dealid": "0xb81eb062d48d43922962e19482d27cb5e2f135a15a4019e69d8c2ae65b7e7754",
+    "taskids": [
+      "0x43fac87337ec1c50279b17b8ebc6d0dd5a8165db5115a6e7f6e88e8e5ffe2322"
+    ],
+    "txHash": "0x046a3f40bba6fe013cc52821584e3be864e4829ce38f367b2e55ede4b33f3517",
+    "date": "2025-11-22T16:52:55.504Z"
+  }
+]
