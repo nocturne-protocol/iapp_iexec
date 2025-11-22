@@ -6,6 +6,7 @@ import {
   callUpdateBalance,
   readEncryptedBalance,
 } from "./services/rpc.js";
+import { DECRYPTION_PRIVATE_KEY } from "./config.js";
 
 // Helper function to convert hex string to Uint8Array
 function hexToUint8Array(hex) {
@@ -34,9 +35,16 @@ const main = async () => {
     const redactedAppSecret = IEXEC_APP_DEVELOPER_SECRET.replace(/./g, "*");
     console.log(`Got an app secret (${redactedAppSecret})!`);
 
-    // Create private key for decryption from config
-    const privateKey = PrivateKey.fromHex(IEXEC_APP_DEVELOPER_SECRET);
-    const decryptionPublicKey = privateKey.publicKey;
+    // Create private key for decrypting encrypted amounts (from app secret)
+    // The encrypted amount is encrypted with the app's public key
+    const appPrivateKey = PrivateKey.fromHex(IEXEC_APP_DEVELOPER_SECRET);
+    const appPublicKey = appPrivateKey.publicKey;
+    console.log(`App Public key: ${appPublicKey.toHex()}`);
+
+    // Create private key for decrypting balances from contract (from config)
+    // Balances are encrypted with the contract's encryption public key
+    const decryptionPrivateKey = PrivateKey.fromHex(DECRYPTION_PRIVATE_KEY);
+    const decryptionPublicKey = decryptionPrivateKey.publicKey;
     console.log(`Decryption Public key: ${decryptionPublicKey.toHex()}`);
 
     // Create private key from app secret for signing transactions
@@ -88,12 +96,9 @@ const main = async () => {
       );
     }
 
-    // Decrypt the amount using the decryption private key from config
-    // decrypt expects: decrypt(privateKey, encryptedData)
-    const decryptedAmountBytes = decrypt(
-      privateKey.secret,
-      encryptedAmount
-    );
+    // Decrypt the amount using the app's private key
+    // The encrypted amount is encrypted with the app's public key
+    const decryptedAmountBytes = decrypt(appPrivateKey.secret, encryptedAmount);
     const decryptedAmount = new TextDecoder().decode(decryptedAmountBytes);
 
     console.log(`Decrypted amount: ${decryptedAmount}`);
@@ -114,9 +119,19 @@ const main = async () => {
     console.log("📖 Reading encrypted balances from contract...");
     const senderBalanceEncrypted = await readEncryptedBalance(senderWallet);
     const receiverBalanceEncrypted = await readEncryptedBalance(receiverWallet);
-    
-    console.log(`  Sender encrypted balance: ${senderBalanceEncrypted.substring(0, 20)}...`);
-    console.log(`  Receiver encrypted balance: ${receiverBalanceEncrypted.substring(0, 20)}...`);
+
+    console.log(
+      `  Sender encrypted balance: ${senderBalanceEncrypted.substring(
+        0,
+        20
+      )}...`
+    );
+    console.log(
+      `  Receiver encrypted balance: ${receiverBalanceEncrypted.substring(
+        0,
+        20
+      )}...`
+    );
 
     // Decrypt balances using the app's private key
     console.log("🔓 Decrypting balances...");
@@ -127,12 +142,19 @@ const main = async () => {
     let receiverBalance = 0;
 
     // Decrypt sender balance (handle empty balance case)
+    // Balances are encrypted with the contract's encryption public key
     if (senderBalanceBytes.length > 0) {
       try {
-        const decryptedSenderBytes = decrypt(privateKey.secret, senderBalanceBytes);
-        senderBalance = parseFloat(new TextDecoder().decode(decryptedSenderBytes));
+        const decryptedSenderBytes = decrypt(
+          decryptionPrivateKey.secret,
+          senderBalanceBytes
+        );
+        senderBalance = parseFloat(
+          new TextDecoder().decode(decryptedSenderBytes)
+        );
         console.log(`  Sender current balance: ${senderBalance}`);
       } catch (error) {
+        console.log(`  Sender balance decryption error: ${error.message}`);
         console.log(`  Sender balance is empty or uninitialized (0)`);
         senderBalance = 0;
       }
@@ -141,12 +163,19 @@ const main = async () => {
     }
 
     // Decrypt receiver balance (handle empty balance case)
+    // Balances are encrypted with the contract's encryption public key
     if (receiverBalanceBytes.length > 0) {
       try {
-        const decryptedReceiverBytes = decrypt(privateKey.secret, receiverBalanceBytes);
-        receiverBalance = parseFloat(new TextDecoder().decode(decryptedReceiverBytes));
+        const decryptedReceiverBytes = decrypt(
+          decryptionPrivateKey.secret,
+          receiverBalanceBytes
+        );
+        receiverBalance = parseFloat(
+          new TextDecoder().decode(decryptedReceiverBytes)
+        );
         console.log(`  Receiver current balance: ${receiverBalance}`);
       } catch (error) {
+        console.log(`  Receiver balance decryption error: ${error.message}`);
         console.log(`  Receiver balance is empty or uninitialized (0)`);
         receiverBalance = 0;
       }
@@ -178,10 +207,14 @@ const main = async () => {
 
     // Validate new balances
     if (senderNewBalance < 0) {
-      throw new Error(`Invalid calculation: sender balance would be negative (${senderNewBalance})`);
+      throw new Error(
+        `Invalid calculation: sender balance would be negative (${senderNewBalance})`
+      );
     }
     if (receiverNewBalance < 0) {
-      throw new Error(`Invalid calculation: receiver balance would be negative (${receiverNewBalance})`);
+      throw new Error(
+        `Invalid calculation: receiver balance would be negative (${receiverNewBalance})`
+      );
     }
 
     // 6. Encrypt the new balances using contract's encryption public key

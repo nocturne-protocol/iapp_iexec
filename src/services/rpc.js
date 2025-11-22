@@ -50,6 +50,13 @@ export async function readEncryptionPublicKey() {
 
     const publicKey = await contract.read.encryptionPublicKey();
     console.log("✅ Encryption Public Key retrieved from contract");
+
+    // viem returns bytes as hex string already, return directly
+    if (typeof publicKey === "string") {
+      return publicKey.startsWith("0x") ? publicKey : `0x${publicKey}`;
+    }
+
+    // If it's a Uint8Array or other format, convert it
     return bytesToHex(publicKey);
   } catch (error) {
     console.error("❌ Error reading encryption public key:", error.message);
@@ -74,7 +81,12 @@ export async function callUpdateBalance(
   receiverNewBalanceEncrypted
 ) {
   try {
-    const account = privateKeyToAccount(privateKeyHex);
+    // Ensure private key has 0x prefix for viem
+    const normalizedPrivateKey = privateKeyHex.startsWith("0x")
+      ? privateKeyHex
+      : `0x${privateKeyHex}`;
+
+    const account = privateKeyToAccount(normalizedPrivateKey);
 
     const walletClient = createWalletClient({
       chain: arbitrumSepolia,
@@ -92,11 +104,12 @@ export async function callUpdateBalance(
     console.log(`  Sender: ${senderAddress}`);
     console.log(`  Receiver: ${receiverAddress}`);
 
+    // viem expects hex strings for bytes type parameters
     const hash = await contract.write.updateBalance([
       senderAddress,
       receiverAddress,
-      hexToUint8Array(senderNewBalanceEncrypted),
-      hexToUint8Array(receiverNewBalanceEncrypted),
+      senderNewBalanceEncrypted,
+      receiverNewBalanceEncrypted,
     ]);
 
     console.log("✅ Transaction hash:", hash);
@@ -146,6 +159,15 @@ export async function readEncryptedBalance(address) {
 
     const encryptedBalance = await contract.read.balanceOf([address]);
     console.log(`✅ Encrypted balance retrieved for ${address}`);
+
+    // viem returns bytes as hex string already, return directly
+    if (typeof encryptedBalance === "string") {
+      return encryptedBalance.startsWith("0x")
+        ? encryptedBalance
+        : `0x${encryptedBalance}`;
+    }
+
+    // If it's a Uint8Array or other format, convert it
     return bytesToHex(encryptedBalance);
   } catch (error) {
     console.error("❌ Error reading encrypted balance:", error.message);
