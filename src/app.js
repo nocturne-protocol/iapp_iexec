@@ -35,20 +35,43 @@ const main = async () => {
     const redactedAppSecret = IEXEC_APP_DEVELOPER_SECRET.replace(/./g, "*");
     console.log(`Got an app secret (${redactedAppSecret})!`);
 
+    // Normalize private keys (ensure consistent format)
+    const normalizedAppSecret = IEXEC_APP_DEVELOPER_SECRET.startsWith("0x")
+      ? IEXEC_APP_DEVELOPER_SECRET.slice(2)
+      : IEXEC_APP_DEVELOPER_SECRET;
+    const normalizedDecryptionKey = DECRYPTION_PRIVATE_KEY.startsWith("0x")
+      ? DECRYPTION_PRIVATE_KEY.slice(2)
+      : DECRYPTION_PRIVATE_KEY;
+
     // Create private key for decrypting encrypted amounts (from app secret)
     // The encrypted amount is encrypted with the app's public key
-    const appPrivateKey = PrivateKey.fromHex(IEXEC_APP_DEVELOPER_SECRET);
+    const appPrivateKey = PrivateKey.fromHex(normalizedAppSecret);
     const appPublicKey = appPrivateKey.publicKey;
     console.log(`App Public key: ${appPublicKey.toHex()}`);
+    console.log(
+      `App Secret (first 10 chars): ${normalizedAppSecret.substring(0, 10)}...`
+    );
 
     // Create private key for decrypting balances from contract (from config)
     // Balances are encrypted with the contract's encryption public key
-    const decryptionPrivateKey = PrivateKey.fromHex(DECRYPTION_PRIVATE_KEY);
+    const decryptionPrivateKey = PrivateKey.fromHex(normalizedDecryptionKey);
     const decryptionPublicKey = decryptionPrivateKey.publicKey;
     console.log(`Decryption Public key: ${decryptionPublicKey.toHex()}`);
+    console.log(
+      `Decryption Key (first 10 chars): ${normalizedDecryptionKey.substring(
+        0,
+        10
+      )}...`
+    );
+
+    // Check if keys are the same
+    if (normalizedAppSecret === normalizedDecryptionKey) {
+      console.log("⚠️  WARNING: App Secret and Decryption Key are the same!");
+    }
 
     // Create private key from app secret for signing transactions
-    const signingPrivateKey = PrivateKey.fromHex(IEXEC_APP_DEVELOPER_SECRET);
+    // Note: viem expects hex string with 0x prefix, so we'll use the original IEXEC_APP_DEVELOPER_SECRET
+    const signingPrivateKey = IEXEC_APP_DEVELOPER_SECRET;
 
     // Parse command line arguments
     // Expected: [encryptedAmount, senderWallet, receiverWallet]
@@ -98,7 +121,41 @@ const main = async () => {
 
     // Decrypt the amount using the app's private key
     // The encrypted amount is encrypted with the app's public key
-    const decryptedAmountBytes = decrypt(appPrivateKey.secret, encryptedAmount);
+    console.log(`Attempting decryption with App Private Key...`);
+    console.log(`Encrypted data length: ${encryptedAmount.length} bytes`);
+    console.log(
+      `Encrypted data (first 20 bytes as hex): ${Array.from(
+        encryptedAmount.slice(0, 20)
+      )
+        .map(b => b.toString(16).padStart(2, "0"))
+        .join("")}...`
+    );
+
+    let decryptedAmountBytes;
+    try {
+      decryptedAmountBytes = decrypt(appPrivateKey.secret, encryptedAmount);
+      console.log(`✅ Decryption successful with App Private Key`);
+    } catch (error) {
+      console.log(
+        `❌ Decryption failed with App Private Key: ${error.message}`
+      );
+      console.log(`Attempting decryption with Decryption Private Key...`);
+      try {
+        decryptedAmountBytes = decrypt(
+          decryptionPrivateKey.secret,
+          encryptedAmount
+        );
+        console.log(`✅ Decryption successful with Decryption Private Key`);
+      } catch (error2) {
+        console.log(
+          `❌ Decryption also failed with Decryption Private Key: ${error2.message}`
+        );
+        throw new Error(
+          `Failed to decrypt with both keys. Original error: ${error.message}`
+        );
+      }
+    }
+
     const decryptedAmount = new TextDecoder().decode(decryptedAmountBytes);
 
     console.log(`Decrypted amount: ${decryptedAmount}`);
