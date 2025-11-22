@@ -1,8 +1,11 @@
 # Nocturne iApp
 
-## Command: `iapp test --args "<encrypted_amount> <sender_address> <recipient_address>"`
+## Command: 
 
-Quickly test decrypting an ECIES-encrypted payload for a specified recipient.  
+`iapp test --args "<encrypted_amount> <sender_address> <recipient_address>"`
+
+Test with an ECIES-encrypted payload for a specified recipient.  
+
 Arguments:
 
 - `<encrypted_data>`: The hex-encoded encrypted data (starts with `0x`).
