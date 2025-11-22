@@ -1,5 +1,5 @@
-// PrivateERC20 contract configuration for Arbitrum Sepolia
-import { CONTRACT_ADDRESS } from "../config.js";
+// PrivateERC20 contract configuration
+import { CONTRACT_ADDRESS } from "../utils/chains.js";
 
 // Re-export for backward compatibility
 export { CONTRACT_ADDRESS };

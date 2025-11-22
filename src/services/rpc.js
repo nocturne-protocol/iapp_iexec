@@ -4,17 +4,14 @@ import {
   http,
   getContract,
 } from "viem";
-import { arbitrumSepolia } from "viem/chains";
 import { privateKeyToAccount } from "viem/accounts";
-import { CONTRACT_ADDRESS, CONTRACT_ABI } from "../contracts/contract.js";
+import { CONTRACT_ABI } from "../contracts/contract.js";
 import { PublicKey, encrypt } from "eciesjs";
-import { RPC_URL } from "../config.js";
-
-// Create viem public client for reading
-const publicClient = createPublicClient({
-  chain: arbitrumSepolia,
-  transport: http(RPC_URL),
-});
+import {
+  getContractAddress,
+  getRpcUrl,
+  getChainObject,
+} from "../utils/chains.js";
 
 // Helper to convert bytes to hex string
 function bytesToHex(bytes) {
@@ -38,12 +35,23 @@ function hexToUint8Array(hex) {
 
 /**
  * Read the encryption public key from the contract
+ * @param {number} chainId - Chain ID (421614 for Arbitrum Sepolia, 84532 for Base Sepolia, 11155111 for Sepolia)
  * @returns {Promise<string>} Encryption public key as hex string
  */
-export async function readEncryptionPublicKey() {
+export async function readEncryptionPublicKey(chainId) {
   try {
+    const contractAddress = getContractAddress(chainId);
+    const rpcUrl = getRpcUrl(chainId);
+    const chain = getChainObject(chainId);
+
+    // Create a public client for this specific chain
+    const publicClient = createPublicClient({
+      chain: chain,
+      transport: http(rpcUrl),
+    });
+
     const contract = getContract({
-      address: CONTRACT_ADDRESS,
+      address: contractAddress,
       abi: CONTRACT_ABI,
       client: publicClient,
     });
@@ -66,6 +74,7 @@ export async function readEncryptionPublicKey() {
 
 /**
  * Call updateBalance on the contract
+ * @param {number} chainId - Chain ID (421614 for Arbitrum Sepolia, 84532 for Base Sepolia, 11155111 for Sepolia)
  * @param {string} privateKeyHex - Private key for signing (from app secret)
  * @param {string} senderAddress - Sender address
  * @param {string} receiverAddress - Receiver address
@@ -74,6 +83,7 @@ export async function readEncryptionPublicKey() {
  * @returns {Promise<string>} Transaction hash
  */
 export async function callUpdateBalance(
+  chainId,
   privateKeyHex,
   senderAddress,
   receiverAddress,
@@ -81,6 +91,11 @@ export async function callUpdateBalance(
   receiverNewBalanceEncrypted
 ) {
   try {
+    // Get chain-specific configuration
+    const contractAddress = getContractAddress(chainId);
+    const rpcUrl = getRpcUrl(chainId);
+    const chain = getChainObject(chainId);
+
     // Ensure private key has 0x prefix for viem
     const normalizedPrivateKey = privateKeyHex.startsWith("0x")
       ? privateKeyHex
@@ -89,13 +104,13 @@ export async function callUpdateBalance(
     const account = privateKeyToAccount(normalizedPrivateKey);
 
     const walletClient = createWalletClient({
-      chain: arbitrumSepolia,
-      transport: http(RPC_URL),
+      chain: chain,
+      transport: http(rpcUrl),
       account,
     });
 
     const contract = getContract({
-      address: CONTRACT_ADDRESS,
+      address: contractAddress,
       abi: CONTRACT_ABI,
       client: walletClient,
     });
@@ -146,13 +161,24 @@ export async function encryptBalance(balance, encryptionPublicKeyHex) {
 
 /**
  * Read the encrypted balance from the contract
+ * @param {number} chainId - Chain ID (421614 for Arbitrum Sepolia, 84532 for Base Sepolia, 11155111 for Sepolia)
  * @param {string} address - Address to read balance for
  * @returns {Promise<string>} Encrypted balance as hex string
  */
-export async function readEncryptedBalance(address) {
+export async function readEncryptedBalance(chainId, address) {
   try {
+    const contractAddress = getContractAddress(chainId);
+    const rpcUrl = getRpcUrl(chainId);
+    const chain = getChainObject(chainId);
+
+    // Create a public client for this specific chain
+    const publicClient = createPublicClient({
+      chain: chain,
+      transport: http(rpcUrl),
+    });
+
     const contract = getContract({
-      address: CONTRACT_ADDRESS,
+      address: contractAddress,
       abi: CONTRACT_ABI,
       client: publicClient,
     });

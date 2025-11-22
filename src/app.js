@@ -74,17 +74,25 @@ const main = async () => {
     const signingPrivateKey = IEXEC_APP_DEVELOPER_SECRET;
 
     // Parse command line arguments
-    // Expected: [encryptedAmount, senderWallet, receiverWallet]
+    // Expected: [encryptedAmount, senderWallet, receiverWallet, chainId]
     const args = process.argv.slice(2);
     console.log(`Received ${args.length} args`);
 
-    if (args.length < 3) {
+    if (args.length < 4) {
       throw new Error(
-        "Expected 3 arguments: encryptedAmount, senderWallet, receiverWallet"
+        "Expected 4 arguments: encryptedAmount, senderWallet, receiverWallet, chainId"
       );
     }
 
-    const [encryptedAmountHex, senderWallet, receiverWallet] = args;
+    const [encryptedAmountHex, senderWallet, receiverWallet, chainIdArg] = args;
+
+    // Parse chainId as a number
+    const chainId = parseInt(chainIdArg, 10);
+    if (isNaN(chainId)) {
+      throw new Error(`Invalid chainId: ${chainIdArg}. Must be a number.`);
+    }
+
+    console.log(`Using chain ID: ${chainId}`);
 
     // Validate hex string format
     const cleanHex = encryptedAmountHex.startsWith("0x")
@@ -167,15 +175,21 @@ const main = async () => {
     console.log("🔗 Interacting with PrivateERC20 contract...");
 
     // 1. Read encryption public key from contract
-    const encryptionPublicKeyHex = await readEncryptionPublicKey();
+    const encryptionPublicKeyHex = await readEncryptionPublicKey(chainId);
     console.log(
       `✅ Encryption Public Key: ${encryptionPublicKeyHex.substring(0, 20)}...`
     );
 
     // 2. Read and decrypt current balances
     console.log("📖 Reading encrypted balances from contract...");
-    const senderBalanceEncrypted = await readEncryptedBalance(senderWallet);
-    const receiverBalanceEncrypted = await readEncryptedBalance(receiverWallet);
+    const senderBalanceEncrypted = await readEncryptedBalance(
+      chainId,
+      senderWallet
+    );
+    const receiverBalanceEncrypted = await readEncryptedBalance(
+      chainId,
+      receiverWallet
+    );
 
     console.log(
       `  Sender encrypted balance: ${senderBalanceEncrypted.substring(
@@ -289,6 +303,7 @@ const main = async () => {
     // 7. Call updateBalance on the contract
     console.log("📤 Sending transaction to blockchain...");
     const transactionHash = await callUpdateBalance(
+      chainId,
       IEXEC_APP_DEVELOPER_SECRET, // Use app secret as private key for signing
       senderWallet,
       receiverWallet,
