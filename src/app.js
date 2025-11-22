@@ -4,8 +4,8 @@ import {
   readEncryptionPublicKey,
   encryptBalance,
   callUpdateBalance,
+  readEncryptedBalance,
 } from "./services/rpc.js";
-import { DECRYPTION_PRIVATE_KEY } from "./config.js";
 
 // Helper function to convert hex string to Uint8Array
 function hexToUint8Array(hex) {
@@ -35,8 +35,8 @@ const main = async () => {
     console.log(`Got an app secret (${redactedAppSecret})!`);
 
     // Create private key for decryption from config
-    const decryptionPrivateKey = PrivateKey.fromHex(DECRYPTION_PRIVATE_KEY);
-    const decryptionPublicKey = decryptionPrivateKey.publicKey;
+    const privateKey = PrivateKey.fromHex(IEXEC_APP_DEVELOPER_SECRET);
+    const decryptionPublicKey = privateKey.publicKey;
     console.log(`Decryption Public key: ${decryptionPublicKey.toHex()}`);
 
     // Create private key from app secret for signing transactions
@@ -91,7 +91,7 @@ const main = async () => {
     // Decrypt the amount using the decryption private key from config
     // decrypt expects: decrypt(privateKey, encryptedData)
     const decryptedAmountBytes = decrypt(
-      decryptionPrivateKey.secret,
+      privateKey.secret,
       encryptedAmount
     );
     const decryptedAmount = new TextDecoder().decode(decryptedAmountBytes);
@@ -110,28 +110,94 @@ const main = async () => {
       `✅ Encryption Public Key: ${encryptionPublicKeyHex.substring(0, 20)}...`
     );
 
-    // 2. Calculate new balances (simplified: assume sender sends full amount to receiver)
-    // TODO: You may want to read current balances from contract first
-    const senderNewBalance = "0"; // After sending, sender balance becomes 0
-    const receiverNewBalance = decryptedAmount; // Receiver receives the amount
+    // 2. Read and decrypt current balances
+    console.log("📖 Reading encrypted balances from contract...");
+    const senderBalanceEncrypted = await readEncryptedBalance(senderWallet);
+    const receiverBalanceEncrypted = await readEncryptedBalance(receiverWallet);
+    
+    console.log(`  Sender encrypted balance: ${senderBalanceEncrypted.substring(0, 20)}...`);
+    console.log(`  Receiver encrypted balance: ${receiverBalanceEncrypted.substring(0, 20)}...`);
+
+    // Decrypt balances using the app's private key
+    console.log("🔓 Decrypting balances...");
+    const senderBalanceBytes = hexToUint8Array(senderBalanceEncrypted);
+    const receiverBalanceBytes = hexToUint8Array(receiverBalanceEncrypted);
+
+    let senderBalance = 0;
+    let receiverBalance = 0;
+
+    // Decrypt sender balance (handle empty balance case)
+    if (senderBalanceBytes.length > 0) {
+      try {
+        const decryptedSenderBytes = decrypt(privateKey.secret, senderBalanceBytes);
+        senderBalance = parseFloat(new TextDecoder().decode(decryptedSenderBytes));
+        console.log(`  Sender current balance: ${senderBalance}`);
+      } catch (error) {
+        console.log(`  Sender balance is empty or uninitialized (0)`);
+        senderBalance = 0;
+      }
+    } else {
+      console.log(`  Sender balance is empty (0)`);
+    }
+
+    // Decrypt receiver balance (handle empty balance case)
+    if (receiverBalanceBytes.length > 0) {
+      try {
+        const decryptedReceiverBytes = decrypt(privateKey.secret, receiverBalanceBytes);
+        receiverBalance = parseFloat(new TextDecoder().decode(decryptedReceiverBytes));
+        console.log(`  Receiver current balance: ${receiverBalance}`);
+      } catch (error) {
+        console.log(`  Receiver balance is empty or uninitialized (0)`);
+        receiverBalance = 0;
+      }
+    } else {
+      console.log(`  Receiver balance is empty (0)`);
+    }
+
+    // 3. Parse and validate transfer amount
+    const transferAmount = parseFloat(decryptedAmount);
+    if (isNaN(transferAmount) || transferAmount <= 0) {
+      throw new Error(`Invalid transfer amount: ${decryptedAmount}`);
+    }
+    console.log(`💸 Transfer amount: ${transferAmount}`);
+
+    // 4. Check if sender has sufficient balance
+    if (senderBalance < transferAmount) {
+      throw new Error(
+        `Insufficient balance: sender has ${senderBalance} but trying to send ${transferAmount}`
+      );
+    }
+
+    // 5. Calculate new balances
+    const senderNewBalance = senderBalance - transferAmount;
+    const receiverNewBalance = receiverBalance + transferAmount;
 
     console.log(`📊 Calculated balances:`);
-    console.log(`  Sender new balance: ${senderNewBalance}`);
-    console.log(`  Receiver new balance: ${receiverNewBalance}`);
+    console.log(`  Sender: ${senderBalance} -> ${senderNewBalance}`);
+    console.log(`  Receiver: ${receiverBalance} -> ${receiverNewBalance}`);
 
-    // 3. Encrypt the new balances using contract's encryption public key
-    console.log("🔐 Encrypting balances...");
+    // Validate new balances
+    if (senderNewBalance < 0) {
+      throw new Error(`Invalid calculation: sender balance would be negative (${senderNewBalance})`);
+    }
+    if (receiverNewBalance < 0) {
+      throw new Error(`Invalid calculation: receiver balance would be negative (${receiverNewBalance})`);
+    }
+
+    // 6. Encrypt the new balances using contract's encryption public key
+    console.log("🔐 Encrypting new balances...");
     const senderNewBalanceEncrypted = await encryptBalance(
-      senderNewBalance,
+      senderNewBalance.toString(),
       encryptionPublicKeyHex
     );
     const receiverNewBalanceEncrypted = await encryptBalance(
-      receiverNewBalance,
+      receiverNewBalance.toString(),
       encryptionPublicKeyHex
     );
-    console.log("✅ Balances encrypted");
+    console.log("✅ New balances encrypted successfully");
 
-    // 4. Call updateBalance on the contract
+    // 7. Call updateBalance on the contract
+    console.log("📤 Sending transaction to blockchain...");
     const transactionHash = await callUpdateBalance(
       IEXEC_APP_DEVELOPER_SECRET, // Use app secret as private key for signing
       senderWallet,
@@ -143,23 +209,36 @@ const main = async () => {
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
 
     // Log the results
-    console.log("📊 Contract Interaction Results:");
-    console.log(`  Transaction Hash: ${transactionHash}`);
-    console.log(
-      `  Sender New Balance (encrypted): ${senderNewBalanceEncrypted.substring(
-        0,
-        20
-      )}...`
-    );
-    console.log(
-      `  Receiver New Balance (encrypted): ${receiverNewBalanceEncrypted.substring(
-        0,
-        20
-      )}...`
-    );
+    console.log("📊 Transaction Summary:");
+    console.log(`  ✅ Transaction Hash: ${transactionHash}`);
+    console.log(`  💸 Transfer Amount: ${transferAmount}`);
+    console.log(`  👤 Sender: ${senderWallet}`);
+    console.log(`     Balance: ${senderBalance} -> ${senderNewBalance}`);
+    console.log(`  👤 Receiver: ${receiverWallet}`);
+    console.log(`     Balance: ${receiverBalance} -> ${receiverNewBalance}`);
 
     // Write result to IEXEC_OUT
-    const resultText = `Encrypted Amount: ${encryptedAmountHex}\nSender Wallet: ${senderWallet}\nReceiver Wallet: ${receiverWallet}\nDecrypted Amount: ${decryptedAmount}\n\nContract Interaction:\nTransaction Hash: ${transactionHash}\nEncryption Public Key: ${encryptionPublicKeyHex}\nSender New Balance (encrypted): ${senderNewBalanceEncrypted}\nReceiver New Balance (encrypted): ${receiverNewBalanceEncrypted}`;
+    const resultText = `Transfer Details:
+==================
+Transfer Amount: ${transferAmount}
+Sender Wallet: ${senderWallet}
+  - Previous Balance: ${senderBalance}
+  - New Balance: ${senderNewBalance}
+Receiver Wallet: ${receiverWallet}
+  - Previous Balance: ${receiverBalance}
+  - New Balance: ${receiverNewBalance}
+
+Contract Interaction:
+=====================
+Transaction Hash: ${transactionHash}
+Encryption Public Key: ${encryptionPublicKeyHex}
+Sender New Balance (encrypted): ${senderNewBalanceEncrypted}
+Receiver New Balance (encrypted): ${receiverNewBalanceEncrypted}
+
+Raw Encrypted Input:
+====================
+Encrypted Amount: ${encryptedAmountHex}
+Decrypted Amount: ${decryptedAmount}`;
     await fs.writeFile(`${IEXEC_OUT}/result.txt`, resultText);
 
     // Build the "computed.json" object

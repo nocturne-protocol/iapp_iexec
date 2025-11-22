@@ -130,3 +130,25 @@ export async function encryptBalance(balance, encryptionPublicKeyHex) {
     throw error;
   }
 }
+
+/**
+ * Read the encrypted balance from the contract
+ * @param {string} address - Address to read balance for
+ * @returns {Promise<string>} Encrypted balance as hex string
+ */
+export async function readEncryptedBalance(address) {
+  try {
+    const contract = getContract({
+      address: CONTRACT_ADDRESS,
+      abi: CONTRACT_ABI,
+      client: publicClient,
+    });
+
+    const encryptedBalance = await contract.read.balanceOf([address]);
+    console.log(`✅ Encrypted balance retrieved for ${address}`);
+    return bytesToHex(encryptedBalance);
+  } catch (error) {
+    console.error("❌ Error reading encrypted balance:", error.message);
+    throw error;
+  }
+}
