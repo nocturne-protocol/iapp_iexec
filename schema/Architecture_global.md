@@ -31,5 +31,13 @@ flowchart LR
   C3 --> STATE
   STATE -.-> C2
 
-  %% Optional: style arrows for clarity
-  %%linkStyle 3 stroke:#f66,stroke-width:3px,%%stroke-dasharray: 5 5;
+  %% Color styling
+  style CLIENT fill:#D5F5E3,stroke:#1ABC9C,stroke-width:2px
+  style ARG fill:#AED6F1,stroke:#2980B9,stroke-width:2px
+  style F5 fill:#FCF3CF,stroke:#F9E79F,stroke-width:2px
+  style SEC1 fill:#FADBD8,stroke:#E74C3C,stroke-width:2px
+  style C2 fill:#EBDEF0,stroke:#6C3483,stroke-width:2px
+  style C3 fill:#EBDEF0,stroke:#6C3483,stroke-width:2px
+  style STATE fill:#D6DBDF,stroke:#626567,stroke-width:2px
+
+  %% Optional: style subgraph label backgrounds a bit darker (Mermaid's ability is limited for subgraph titles, so this is mostly for nodes)
