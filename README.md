@@ -41,7 +41,7 @@ sequenceDiagram
 
 **Encryption:** ECIES with secp256k1 (same curve as Ethereum)
 
-**Contract:** `0xbb21e58a72327a5fda6f5d3673f1fab6607aeab1` ([Arbiscan](https://sepolia.arbiscan.io/address/0x3b3C98D7AfF91b7032d81fC25dfe8d8ECFe546CC))
+**Contract:** `0xbb21e58a72327a5fda6f5d3673f1fab6607aeab1` ([Arbiscan](https://sepolia.arbiscan.io/address/0xbb21e58a72327a5fda6f5d3673f1fab6607aeab1))
 
 **iApp:** `0xBb21e58a72327A5FDA6f5d3673F1Fab6607aEaB1` on Arbitrum Sepolia
 
