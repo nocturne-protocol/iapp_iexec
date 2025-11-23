@@ -1,0 +1,9 @@
+{
+  "defaultChain": "bellecour",
+  "projectName": "nocturne",
+  "template": "JavaScript",
+  "dockerhubUsername": "",
+  "walletPrivateKey": "",
+  "appSecret": "",
+  "dockerhubAccessToken": ""
+}
