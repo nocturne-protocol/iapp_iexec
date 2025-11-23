@@ -18,19 +18,21 @@ Nocturne iApp enables **private token transfers** on Arbitrum Sepolia using iExe
 
 ## Architecture
 
-### Transaction Flow
+```mermaid
+sequenceDiagram
+    participant Client
+    participant TEE as iExec TEE
+    participant Contract as Smart Contract
 
-```
-Client               iExec TEE            Blockchain
-  │                     │                     │
-  ├─ Encrypt amount     │                     │
-  ├────────────────────>│                     │
-  │                     ├─ Decrypt amount     │
-  │                     ├─ Read balances ───>│
-  │                     ├─ Validate & compute │
-  │                     ├─ Re-encrypt         │
-  │                     ├─ Update balances ─>│
-  │                     │                     │
+    Client->>Client: Encrypt amount (ECIES)
+    Client->>TEE: Submit encrypted payload
+    TEE->>TEE: Decrypt amount
+    TEE->>Contract: Read encrypted balances
+    TEE->>TEE: Decrypt & validate balances
+    TEE->>TEE: Compute new balances
+    TEE->>TEE: Re-encrypt balances
+    TEE->>Contract: updateBalance(encrypted)
+    Contract->>Contract: Store encrypted balances
 ```
 
 **Key principle:** All balances remain encrypted on-chain. Plaintext values exist only inside the TEE during computation.
